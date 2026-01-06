@@ -1,6 +1,5 @@
-
 import React, { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { X, Camera, Zap, AlertTriangle, Loader2 } from 'lucide-react';
 
 interface ScannerProps {
@@ -24,53 +23,69 @@ const Scanner: React.FC<ScannerProps> = ({ onDetected, onCancel }) => {
           throw new Error("تصفحك لا يدعم الوصول للكاميرا بشكل آمن.");
         }
 
-        const html5QrCode = new Html5Qrcode(scannerContainerId);
+        // تحديد التنسيقات المدعومة (التركيز على الباركود 1D)
+        const formatsToSupport = [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.ITF,
+        ];
+
+        const html5QrCode = new Html5Qrcode(scannerContainerId, {
+          formatsToSupport: formatsToSupport,
+          verbose: false
+        });
         scannerRef.current = html5QrCode;
-        
-        const config = { 
-          fps: 15, 
-          qrbox: { width: 250, height: 150 },
-          aspectRatio: 1.0
+
+        const qrboxFunction = (viewfinderWidth: number, viewfinderHeight: number) => {
+          let minEdgePercentage = 0.7; // 70%
+          let minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+          let qrboxSize = Math.floor(minEdgeSize * minEdgePercentage);
+          return {
+            width: qrboxSize,
+            height: Math.floor(qrboxSize / 1.6) // شكل عرضي للباركود 1D
+          };
+        };
+
+        const config = {
+          fps: 20,
+          qrbox: qrboxFunction,
+          aspectRatio: 1.0,
+          showTorchButtonIfSupported: true
         };
 
         const handleSuccess = (decodedText: string) => {
           if (isMounted && !isProcessing) {
             setIsProcessing(true);
-            // إعطاء فرصة بسيطة للمستخدم لرؤية النجاح قبل الإغلاق
             setTimeout(() => {
-                if (scannerRef.current?.isScanning) {
-                    scannerRef.current.stop().then(() => {
-                        onDetected(decodedText);
-                    }).catch(console.error);
-                } else {
-                    onDetected(decodedText);
-                }
-            }, 300);
+              if (scannerRef.current?.isScanning) {
+                scannerRef.current.stop().then(() => {
+                  onDetected(decodedText);
+                }).catch(console.error);
+              } else {
+                onDetected(decodedText);
+              }
+            }, 200);
           }
         };
 
-        // المحاولة الذكية: البدء بالكاميرا الخلفية أولاً
         try {
           await html5QrCode.start(
-            { facingMode: "environment" }, 
-            config, 
+            { facingMode: "environment" },
+            config,
             handleSuccess,
-            () => {}
+            () => { }
           );
         } catch (firstErr: any) {
           console.warn("Environmental camera failed, trying fallback...", firstErr);
-          
-          // محاولة الحصول على قائمة الكاميرات في حال فشل التوجيه التلقائي
           const devices = await Html5Qrcode.getCameras();
           if (devices && devices.length > 0) {
-            // استخدام آخر كاميرا في القائمة (غالباً ما تكون الخلفية في الأندرويد)
             const deviceId = devices[devices.length - 1].id;
-            await html5QrCode.start(
-              deviceId, 
-              config, 
-              handleSuccess,
-              () => {}
-            );
+            await html5QrCode.start(deviceId, config, handleSuccess, () => { });
           } else {
             throw new Error("NotFound");
           }
@@ -131,19 +146,19 @@ const Scanner: React.FC<ScannerProps> = ({ onDetected, onCancel }) => {
 
         {!isInitializing && !error && !isProcessing && (
           <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-             <div className="w-[280px] h-[180px] border-2 border-blue-400 rounded-2xl relative shadow-[0_0_0_1000px_rgba(0,0,0,0.6)]">
-                <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-blue-400 rounded-tl-xl"></div>
-                <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-blue-400 rounded-tr-xl"></div>
-                <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-blue-400 rounded-bl-xl"></div>
-                <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-blue-400 rounded-br-xl"></div>
-                <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-red-500/50 animate-pulse"></div>
-                
-                <div className="absolute -bottom-12 left-0 right-0 text-center">
-                  <span className="bg-black/40 text-white text-[10px] px-3 py-1 rounded-full backdrop-blur-sm">
-                    وجه المربع نحو الباركود
-                  </span>
-                </div>
-             </div>
+            <div className="w-[280px] h-[180px] border-2 border-blue-400 rounded-2xl relative shadow-[0_0_0_1000px_rgba(0,0,0,0.6)]">
+              <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-blue-400 rounded-tl-xl"></div>
+              <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-blue-400 rounded-tr-xl"></div>
+              <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-blue-400 rounded-bl-xl"></div>
+              <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-blue-400 rounded-br-xl"></div>
+              <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-red-500/50 animate-pulse"></div>
+
+              <div className="absolute -bottom-12 left-0 right-0 text-center">
+                <span className="bg-black/40 text-white text-[10px] px-3 py-1 rounded-full backdrop-blur-sm">
+                  وجه المربع نحو الباركود
+                </span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -161,8 +176,8 @@ const Scanner: React.FC<ScannerProps> = ({ onDetected, onCancel }) => {
             </div>
             <p className="text-xl font-bold mb-4 leading-tight">{error}</p>
             <p className="text-gray-400 text-sm mb-8 italic">يرجى التأكد من توصيل الكاميرا أو مراجعة إعدادات الخصوصية في هاتفك.</p>
-            <button 
-              onClick={onCancel} 
+            <button
+              onClick={onCancel}
               className="w-full py-4 bg-white text-black rounded-2xl font-bold shadow-xl active:scale-95 transition-transform"
             >
               العودة للرئيسية
