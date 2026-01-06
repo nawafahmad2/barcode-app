@@ -1,0 +1,7 @@
+{
+  "name": "Barcode Inventory Pro",
+  "description": "نظام متطور لإدارة المخزون وتوليد الباركود مع ميزة المسح الضوئي المباشر بالكاميرا.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
